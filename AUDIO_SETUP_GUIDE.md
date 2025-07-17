@@ -139,25 +139,37 @@ SD Card Root/
 - Maximum file size: ~100MB per file
 - SD card must be FAT32 formatted
 
-#### Tablet Audio Structure
+#### Tablet Audio Structure (Stereo)
 ```
 tablet_audio/
 ├── audio/
-│   ├── ambient.mp3       # Background ambient music
-│   ├── puzzle1.mp3       # Puzzle 1 music
-│   ├── puzzle2.mp3       # Puzzle 2 music  
-│   ├── puzzle3.mp3       # Puzzle 3/video music
-│   ├── complete.mp3      # Puzzle completion music
-│   ├── victory.mp3       # Final victory music
+│   ├── ambient.mp3       # Background ambient music (stereo/both channels)
+│   ├── puzzle1.mp3       # Puzzle 1 music (stereo/both channels)
+│   ├── puzzle2.mp3       # Puzzle 2 music (stereo/both channels) 
+│   ├── puzzle3.mp3       # Puzzle 3/video music (stereo/both channels)
+│   ├── complete.mp3      # Puzzle completion music (stereo/both channels)
+│   ├── victory.mp3       # Final victory music (stereo/both channels)
 │   └── effects/
-│       ├── start.mp3     # Video start sound
-│       ├── success.mp3   # Success sound
-│       ├── complete.mp3  # Completion sound
-│       └── notification.mp3 # Notification sound
+│       ├── start.mp3         # Video start sound (center/both)
+│       ├── success.mp3       # Success sound (center/both)
+│       ├── complete.mp3      # Completion sound (center/both)
+│       ├── notification.mp3  # Notification sound (center/both)
+│       ├── touch_left.mp3    # Station 1 touch sound (left channel)
+│       ├── touch_right.mp3   # Station 2 touch sound (right channel)
+│       ├── maze_left.mp3     # Station 1 maze complete (left channel)
+│       ├── maze_right.mp3    # Station 2 maze complete (right channel)
+│       ├── latch_left.mp3    # Station 1 latch sound (left channel)
+│       └── latch_right.mp3   # Station 2 latch sound (right channel)
 └── video/
     ├── puzzle3_station1.mp4  # Video for station 1
     └── puzzle3_station2.mp4  # Video for station 2
 ```
+
+**Stereo Audio File Notes:**
+- **Background Music**: Create full stereo files that will play through both speakers
+- **Station Effects**: Create separate left-channel and right-channel versions of effects
+- **Mono Sources**: Can be duplicated and panned in audio software to create stereo versions
+- **Web Audio API**: Browser handles the stereo separation automatically
 
 ### 3. Audio Track Recommendations
 
@@ -195,24 +207,32 @@ tablet_audio/
 
 ### ESP32 Station Features
 - **Startup Sound** - 3-tone ascending melody when system initializes
-- **Touch Feedback** - Short beep when sensors are touched
+- **Touch Feedback** - Short beep when sensors are touched (+ stereo tablet feedback)
 - **Puzzle Progress** - Different sounds for each puzzle completion
-- **Maze Feedback** - Ball detection and completion sounds
-- **Latch Sounds** - Audio feedback when magnetic latches open/close
+- **Maze Feedback** - Ball detection and completion sounds (+ stereo tablet feedback)
+- **Latch Sounds** - Audio feedback when magnetic latches open/close (+ stereo tablet feedback)
 - **Final Celebration** - Epic victory melody sequence
 
-### Tablet Features
-- **Volume Control** - Master volume slider for all audio
-- **Background Music** - Continuous ambient tracks during puzzles
-- **Sound Effects** - Notification and interaction sounds
-- **Video Sync** - Audio coordinated with video playback
-- **Status Audio** - Different music for each puzzle state
+### Tablet Features - Stereo Spatial Audio
+- **Background Music** - Ambient tracks play through BOTH speakers (stereo)
+- **Station 1 Effects** - Touch, maze, and latch sounds play through LEFT speaker only
+- **Station 2 Effects** - Touch, maze, and latch sounds play through RIGHT speaker only
+- **Volume Control** - Master volume slider affects all audio
+- **Visual Feedback** - Audio status shows stereo separation info
+- **Web Audio API** - Advanced browser audio processing for precise stereo control
+
+### Spatial Audio Benefits
+- **Player Identification** - Instantly know which station triggered an action
+- **Immersive Experience** - 3D audio space enhances cooperative gameplay
+- **Clear Feedback** - No confusion about which player performed an action
+- **Professional Feel** - High-quality audio experience like modern games
 
 ### Synchronized Features
-- **State Transitions** - Audio changes when puzzles advance
-- **Cross-Platform** - ESP32 controls tablet audio via HTTP
-- **Real-time Updates** - Volume and track changes sync across devices
-- **Fallback Support** - Graceful degradation if connections fail
+- **State Transitions** - Background music changes affect both speakers
+- **Station Actions** - Individual station sounds route to correct speaker
+- **Cross-Platform** - ESP32 controls tablet stereo audio via HTTP
+- **Real-time Updates** - Volume and stereo balance sync across devices
+- **Fallback Support** - Graceful degradation to mono if stereo fails
 
 ## Setup Instructions
 
@@ -286,8 +306,35 @@ tablet_audio/
 - **Format**: MP3 for compatibility
 - **Sample Rate**: 44.1kHz recommended
 - **Bit Rate**: 128kbps for speech, 192kbps+ for music
-- **Channels**: Mono acceptable, stereo preferred
+- **Channels**: Stereo required for proper spatial separation
 - **Normalization**: -6dB peak maximum to prevent clipping
+
+### Creating Stereo Effect Files
+
+#### Using Audacity (Free):
+1. **Import mono sound effect** (e.g., touch sound)
+2. **Generate** → **Silence** to create a stereo track
+3. **Tracks** → **Mix** → **Mix and Render** to combine
+4. **Effect** → **Pan** → Set to -100% for left, +100% for right
+5. **Export** as MP3 with "_left" or "_right" suffix
+
+#### Using Command Line (FFmpeg):
+```bash
+# Create left-channel version (Station 1)
+ffmpeg -i touch_sound.mp3 -af "pan=stereo|c0=c0|c1=0" touch_left.mp3
+
+# Create right-channel version (Station 2)  
+ffmpeg -i touch_sound.mp3 -af "pan=stereo|c0=0|c1=c0" touch_right.mp3
+
+# Create center version (both channels)
+ffmpeg -i touch_sound.mp3 -af "pan=stereo|c0=c0|c1=c0" touch_center.mp3
+```
+
+#### Quick Duplication Method:
+If you have mono sound effects, you can duplicate them:
+- `touch_sound.mp3` → `touch_left.mp3` + `touch_right.mp3`
+- The Web Audio API will handle the channel separation
+- This works for testing, but dedicated stereo files sound better
 
 ## Advanced Features
 

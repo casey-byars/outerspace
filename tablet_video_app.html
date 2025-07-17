@@ -276,7 +276,7 @@
                 <input type="range" class="volume-slider" id="volumeSlider" min="0" max="100" value="70">
                 <span id="volumeDisplay">70%</span>
             </div>
-            <div class="audio-info" id="audioInfo">Background: Ambient | Effects: Enabled</div>
+            <div class="audio-info" id="audioInfo">Background: Ambient (Stereo) | Station 1: Left | Station 2: Right</div>
         </div>
         
         <div class="video-container">
@@ -341,7 +341,16 @@
                 this.backgroundVolume = 0.5;
                 this.effectsVolume = 0.8;
                 
+                // Stereo audio context for spatial separation
+                this.audioContext = null;
+                this.leftGain = null;
+                this.rightGain = null;
+                this.merger = null;
+                this.station1Source = null;
+                this.station2Source = null;
+                
                 this.initializeAudio();
+                this.setupStereoAudio();
                 this.setupAudioTracks();
             }
             
@@ -370,6 +379,31 @@
                 this.setupAutoplayHandling();
             }
             
+            setupStereoAudio() {
+                try {
+                    // Initialize Web Audio API for stereo control
+                    this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    
+                    // Create stereo merger for combining left/right channels
+                    this.merger = this.audioContext.createChannelMerger(2);
+                    
+                    // Create gain nodes for left (Station 1) and right (Station 2) channels
+                    this.leftGain = this.audioContext.createGain();
+                    this.rightGain = this.audioContext.createGain();
+                    
+                    // Connect gain nodes to respective channels of merger
+                    this.leftGain.connect(this.merger, 0, 0);   // Left channel
+                    this.rightGain.connect(this.merger, 0, 1);  // Right channel
+                    
+                    // Connect merger to audio context destination
+                    this.merger.connect(this.audioContext.destination);
+                    
+                    console.log('Stereo audio system initialized');
+                } catch (e) {
+                    console.warn('Web Audio API not supported, falling back to standard audio:', e);
+                }
+            }
+            
             setupAudioTracks() {
                 // Audio track mapping for different puzzle states
                 this.audioTracks = {
@@ -385,7 +419,14 @@
                     start: 'audio/effects/start.mp3',
                     success: 'audio/effects/success.mp3',
                     complete: 'audio/effects/complete.mp3',
-                    notification: 'audio/effects/notification.mp3'
+                    notification: 'audio/effects/notification.mp3',
+                    // Station-specific stereo effects
+                    touch_station_1: 'audio/effects/touch_left.mp3',
+                    touch_station_2: 'audio/effects/touch_right.mp3',
+                    maze_complete_station_1: 'audio/effects/maze_left.mp3',
+                    maze_complete_station_2: 'audio/effects/maze_right.mp3',
+                    latch_station_1: 'audio/effects/latch_left.mp3',
+                    latch_station_2: 'audio/effects/latch_right.mp3'
                 };
             }
             
@@ -426,13 +467,27 @@
                 this.backgroundAudio.src = trackUrl;
                 this.backgroundAudio.load();
                 
+                // Connect background music to stereo output (both channels)
+                if (this.audioContext && !this.backgroundAudio.connectedToStereo) {
+                    try {
+                        const bgSource = this.audioContext.createMediaElementSource(this.backgroundAudio);
+                        // Connect to both left and right channels for ambient/background music
+                        bgSource.connect(this.leftGain);
+                        bgSource.connect(this.rightGain);
+                        this.backgroundAudio.connectedToStereo = true;
+                        console.log('Background music connected to stereo output');
+                    } catch (e) {
+                        console.warn('Failed to connect background music to stereo:', e);
+                    }
+                }
+                
                 this.backgroundAudio.play().then(() => {
                     this.currentBackgroundTrack = trackName;
-                    this.updateAudioInfo(`Background: ${trackName.charAt(0).toUpperCase() + trackName.slice(1)} | Effects: Enabled`);
+                    this.updateAudioInfo(`Background: ${trackName.charAt(0).toUpperCase() + trackName.slice(1)} (Stereo) | Effects: Station Separated`);
                     console.log('Playing background music:', trackName);
                 }).catch(e => {
                     console.warn('Failed to play background music:', e);
-                    this.updateAudioInfo('Background: Error | Effects: Enabled');
+                    this.updateAudioInfo('Background: Error | Effects: Station Separated');
                 });
             }
             
@@ -449,11 +504,70 @@
                     return;
                 }
                 
-                this.effectsAudio.src = effectUrl;
-                this.effectsAudio.load();
-                this.effectsAudio.play().catch(e => {
-                    console.warn('Failed to play effect:', e);
-                });
+                // Check if this is a station-specific stereo effect
+                if (effectName.includes('station_')) {
+                    this.playStereoEffect(effectName, effectUrl);
+                } else {
+                    // Regular center/both channel effect
+                    this.effectsAudio.src = effectUrl;
+                    this.effectsAudio.load();
+                    this.effectsAudio.play().catch(e => {
+                        console.warn('Failed to play effect:', e);
+                    });
+                }
+            }
+            
+            playStereoEffect(effectName, effectUrl) {
+                if (!this.audioContext) {
+                    // Fallback to regular audio if Web Audio API not available
+                    this.effectsAudio.src = effectUrl;
+                    this.effectsAudio.load();
+                    this.effectsAudio.play().catch(e => {
+                        console.warn('Failed to play effect:', e);
+                    });
+                    return;
+                }
+                
+                try {
+                    // Create audio element for this effect
+                    const audio = new Audio(effectUrl);
+                    const source = this.audioContext.createMediaElementSource(audio);
+                    
+                    // Determine which channel to play on
+                    if (effectName.includes('station_1')) {
+                        // Station 1 = Left channel only
+                        this.leftGain.gain.value = this.masterVolume * this.effectsVolume;
+                        this.rightGain.gain.value = 0;
+                        source.connect(this.leftGain);
+                        console.log('Playing Station 1 effect on LEFT channel:', effectName);
+                    } else if (effectName.includes('station_2')) {
+                        // Station 2 = Right channel only  
+                        this.leftGain.gain.value = 0;
+                        this.rightGain.gain.value = this.masterVolume * this.effectsVolume;
+                        source.connect(this.rightGain);
+                        console.log('Playing Station 2 effect on RIGHT channel:', effectName);
+                    }
+                    
+                    // Play the audio
+                    audio.play().catch(e => {
+                        console.warn('Failed to play stereo effect:', e);
+                    });
+                    
+                    // Clean up after audio finishes
+                    audio.addEventListener('ended', () => {
+                        source.disconnect();
+                        // Reset gain values for future effects
+                        this.leftGain.gain.value = this.masterVolume * this.effectsVolume;
+                        this.rightGain.gain.value = this.masterVolume * this.effectsVolume;
+                    });
+                    
+                } catch (e) {
+                    console.warn('Failed to create stereo effect:', e);
+                    // Fallback to regular audio
+                    this.effectsAudio.src = effectUrl;
+                    this.effectsAudio.load();
+                    this.effectsAudio.play();
+                }
             }
             
             updateAudioInfo(text) {
@@ -464,20 +578,30 @@
             handleAudioCommand(command) {
                 console.log('Received audio command:', command);
                 
+                // Handle stereo station-specific commands
+                if (command.includes('touch_') || command.includes('maze_complete_') || command.includes('latch_')) {
+                    this.playEffect(command);
+                    return;
+                }
+                
                 switch(command) {
                     case 'ambient':
                         this.playBackgroundMusic('ambient');
+                        this.updateAudioInfo('Background: Ambient (Stereo) | Effects: Station Separated');
                         break;
                     case 'puzzle1':
                         this.playBackgroundMusic('puzzle1');
+                        this.updateAudioInfo('Background: Puzzle 1 (Stereo) | Effects: Station Separated');
                         break;
                     case 'puzzle2':
                         this.playBackgroundMusic('puzzle2');
                         this.playEffect('notification');
+                        this.updateAudioInfo('Background: Puzzle 2 (Stereo) | Effects: Station Separated');
                         break;
                     case 'puzzle3':
                         this.playBackgroundMusic('puzzle3');
                         this.playEffect('notification');
+                        this.updateAudioInfo('Background: Puzzle 3 (Stereo) | Effects: Station Separated');
                         break;
                     case 'complete':
                         this.playEffect('complete');
@@ -485,9 +609,11 @@
                     case 'victory':
                         this.playBackgroundMusic('victory');
                         this.playEffect('success');
+                        this.updateAudioInfo('Background: Victory (Stereo) | Effects: Celebration');
                         break;
                     case 'stop':
                         this.stopBackgroundMusic();
+                        this.updateAudioInfo('Background: Stopped | Effects: Ready');
                         break;
                     default:
                         console.warn('Unknown audio command:', command);

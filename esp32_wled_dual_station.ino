@@ -1212,6 +1212,12 @@ void playErrorSound() {
 
 void playTouchFeedback() {
   playTone(800, 100);
+  
+  // Send stereo touch feedback to tablets
+  if (IS_MASTER) {
+    String audioCommand = "touch_" + String(STATION_ID);
+    triggerTabletAudio(audioCommand);
+  }
 }
 
 void playMazeCompleteSound() {
@@ -1220,12 +1226,24 @@ void playMazeCompleteSound() {
     playTone(400 + (i * 100), 120);
     delay(30);
   }
+  
+  // Send stereo maze completion to tablets
+  if (IS_MASTER) {
+    String audioCommand = "maze_complete_" + String(STATION_ID);
+    triggerTabletAudio(audioCommand);
+  }
 }
 
 void playLatchSound() {
   playTone(600, 150);
   delay(50);
   playTone(800, 150);
+  
+  // Send stereo latch sound to tablets
+  if (IS_MASTER) {
+    String audioCommand = "latch_" + String(STATION_ID);
+    triggerTabletAudio(audioCommand);
+  }
 }
 
 void playFinalCelebration() {
@@ -1271,14 +1289,14 @@ void setAudioVolume(int volume) {
   Serial.println(volume);
 }
 
-// Web-based audio control for tablets
+// Enhanced stereo audio control for tablets
 void triggerTabletAudio(String audioCommand) {
   String tablet1URL = "http://" + String(tabletIP1) + "/audio?command=" + audioCommand;
   String tablet2URL = "http://" + String(tabletIP2) + "/audio?command=" + audioCommand;
   
   HTTPClient http1, http2;
   
-  // Send audio command to both tablets
+  // Send audio command to both tablets for stereo processing
   http1.begin(tablet1URL);
   http2.begin(tablet2URL);
   
@@ -1294,6 +1312,24 @@ void triggerTabletAudio(String audioCommand) {
   
   http1.end();
   http2.end();
+}
+
+// Station-specific audio feedback
+void playStationSpecificSound(String soundType) {
+  // Play local buzzer sound
+  if (soundType == "success") {
+    playPuzzleCompleteSound();
+  } else if (soundType == "touch") {
+    playTouchFeedback();
+  } else if (soundType == "maze") {
+    playMazeCompleteSound();
+  }
+  
+  // Send stereo command to tablets if this is master station
+  if (IS_MASTER) {
+    String audioCommand = soundType + "_station_" + String(STATION_ID);
+    triggerTabletAudio(audioCommand);
+  }
 }
 
 void handleSerialCommands() {
