@@ -1,7 +1,7 @@
-# ESP32 Multi-Station WLED Touch Controller v2.0 Setup Guide
+# ESP32 Dual-Station WLED Touch Controller v3.0 Setup Guide
 
 ## Overview
-This system creates a two-puzzle cooperative experience where 3 people must work together. Puzzle 1 requires simultaneous touch activation, which opens servo latches containing magnetic wands. Puzzle 2 requires using these wands to guide metal balls through mazes to completion zones detected by hall sensors.
+This system creates a three-puzzle cooperative experience where 2 people must work together. Puzzle 1 requires simultaneous touch activation, which opens servo latches containing magnetic wands. Puzzle 2 requires using these wands to guide metal balls through mazes to completion zones detected by hall sensors. Puzzle 3 involves watching videos on tablets with progress tracking.
 
 ## Hardware Requirements
 
@@ -83,11 +83,6 @@ In Arduino IDE, install these libraries:
 #define STATION_ID 2
 ```
 
-#### Station 3 (Slave):
-```cpp
-#define STATION_ID 3
-```
-
 ### 3. Get MAC Addresses
 
 1. Upload the code to each ESP32
@@ -98,7 +93,6 @@ In Arduino IDE, install these libraries:
 ```cpp
 uint8_t station1_mac[] = {0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF}; // Station 1 MAC
 uint8_t station2_mac[] = {0x11, 0x22, 0x33, 0x44, 0x55, 0x66}; // Station 2 MAC
-uint8_t station3_mac[] = {0x77, 0x88, 0x99, 0xAA, 0xBB, 0xCC}; // Station 3 MAC
 ```
 
 ### 4. Configure Network Settings
@@ -142,8 +136,8 @@ bool touchDetected = touchValue < TOUCH_THRESHOLD;
 ### Example Presets:
 - Preset 0: Soft White Glow (initial state)
 - Preset 1: Green Pulse (puzzle 1 complete)
-- Preset 2: Rainbow Chase (puzzle 2 complete)
-- Preset 3: Blue Fire Effect
+- Preset 2: Blue Fire Effect (puzzle 2 complete)
+- Preset 3: Rainbow Chase (puzzle 3 complete)
 - Preset 4: Multi-color Strobe
 - Preset 5: Purple Breathe
 - etc.
@@ -213,10 +207,10 @@ bool touchDetected = touchValue < TOUCH_THRESHOLD;
 5. Confirm LED indicators work
 
 ### 2. Communication Test
-1. Power on all three stations
+1. Power on both stations
 2. Use Serial command `status` to check station states
 3. Use Serial command `test` to verify ESP-NOW communication
-4. Touch sensors and verify other stations receive updates
+4. Touch sensors and verify the other station receives updates
 
 ### 3. WLED Integration Test
 1. Ensure WLED controller is powered and connected
@@ -224,11 +218,13 @@ bool touchDetected = touchValue < TOUCH_THRESHOLD;
 3. Verify WLED responds with correct preset
 
 ### 4. Full System Test
-1. All stations powered and communicating
-2. Have all three people touch their sensors simultaneously
+1. Both stations powered and communicating
+2. Have both people touch their sensors simultaneously
 3. Hold for required duration (default 2 seconds)
-4. Verify WLED preset advances
-5. Verify celebration flash on all stations
+4. Verify WLED preset advances and latches open
+5. Complete mazes to advance to video puzzle
+6. Verify videos start and progress is tracked
+7. Verify final celebration when all puzzles complete
 
 ## Troubleshooting
 
