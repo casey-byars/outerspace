@@ -1,7 +1,7 @@
 /*
- * ESP32 WLED Dual-Station Touch Controller v3.0
+ * ESP32 WLED Dual-Station Touch Controller v3.1 - Audio Enhanced
  * 
- * Three-puzzle cooperative system for 2 people:
+ * Three-puzzle cooperative system for 2 people with full audio support:
  * PUZZLE 1: Both people touch sensors simultaneously for 2 seconds
  * PUZZLE 2: Both people complete magnetic ball mazes using wands
  * PUZZLE 3: Video playback on tablet/iPad with interaction detection
@@ -12,16 +12,23 @@
  * - Servo motor for latch (GPIO16)
  * - Hall sensor for maze completion (GPIO34)
  * - Status LEDs (GPIO2, GPIO5)
- * - Buzzer (GPIO19)
+ * - Buzzer (GPIO19) for sound effects
+ * - DFPlayer Mini + Speaker (optional, GPIO17/18) for MP3 audio
  * - Magnetic wand (released by servo latch)
  * - Metal ball maze with magnetic completion zone
  * - Tablet/iPad for video display (communicates via HTTP)
  * 
+ * Audio Features:
+ * - Background music during each puzzle phase
+ * - Sound effects for all interactions
+ * - Tablet-based audio for videos and narration
+ * - Synchronized audio across stations
+ * 
  * Puzzle Flow:
- * 1. Initial state: WLED preset 0 (glow)
- * 2. Solve puzzle 1 → WLED preset 1 + open latches
- * 3. Solve puzzle 2 → WLED preset 2 + trigger videos
- * 4. Complete puzzle 3 → WLED preset 3 + final celebration
+ * 1. Initial state: WLED preset 0 (glow) + ambient audio
+ * 2. Solve puzzle 1 → WLED preset 1 + open latches + success music
+ * 3. Solve puzzle 2 → WLED preset 2 + trigger videos + puzzle 2 music
+ * 4. Complete puzzle 3 → WLED preset 3 + final celebration + victory music
  * 5. System can cycle through more puzzles/presets
  */
 
@@ -33,6 +40,11 @@
 #include <ESP32Servo.h>
 #include <WebServer.h>
 #include <SPIFFS.h>
+#include <SoftwareSerial.h>
+
+// Audio Library for DFPlayer Mini (optional)
+// Uncomment the next line if you have DFPlayer Mini connected
+// #include <DFRobotDFPlayerMini.h>
 
 // Station Configuration - CHANGE THIS FOR EACH STATION
 #define STATION_ID 1                    // Set to 1 or 2 for each station
@@ -59,6 +71,10 @@ const int tabletPort = 8080;                // Port for video control API
 #define EXTERNAL_LED_PIN 5              // External LED for better visibility
 #define BUZZER_PIN 19                   // Buzzer for audio feedback
 #define VIDEO_TRIGGER_PIN 21            // Optional: GPIO pin to trigger local video
+
+// Audio Pins for DFPlayer Mini (if connected)
+#define DFPLAYER_RX_PIN 16 // Connect to TX of DFPlayer Mini
+#define DFPLAYER_TX_PIN 17 // Connect to RX of DFPlayer Mini
 
 // Touch Sensor Configuration
 #define TOUCH_THRESHOLD 30              // Touch threshold for capacitive sensors
@@ -182,9 +198,12 @@ bool ledState = false;
 WiFiUDP udp;
 WebServer webServer(WEB_SERVER_PORT);
 
+// DFPlayer Mini object (if connected)
+// DFRobotDFPlayerMini myDFPlayer;
+
 void setup() {
   Serial.begin(115200);
-  Serial.println("ESP32 Dual-Station Touch Controller v3.0 Starting...");
+  Serial.println("ESP32 Dual-Station Touch Controller v3.1 Starting...");
   Serial.print("Station ID: ");
   Serial.println(STATION_ID);
   Serial.print("Role: ");
@@ -202,6 +221,19 @@ void setup() {
   pinMode(EXTERNAL_LED_PIN, OUTPUT);
   pinMode(BUZZER_PIN, OUTPUT);
   pinMode(VIDEO_TRIGGER_PIN, OUTPUT);
+  
+  // Initialize audio pins for DFPlayer Mini (if connected)
+  // if (DFPLAYER_RX_PIN != -1 && DFPLAYER_TX_PIN != -1) {
+  //   pinMode(DFPLAYER_RX_PIN, INPUT);
+  //   pinMode(DFPLAYER_TX_PIN, OUTPUT);
+  //   myDFPlayer.begin(DFPLAYER_TX_PIN, DFPLAYER_RX_PIN);
+  //   myDFPlayer.setTimeOut(500); // Set serial communication time out 500ms
+  //   if (!myDFPlayer.begin(Serial)) { // Use Serial1 for DFPlayer Mini
+  //     Serial.println("DFPlayer Mini failed to initialize.");
+  //   } else {
+  //     Serial.println("DFPlayer Mini initialized successfully!");
+  //   }
+  // }
   
   // Initialize servo
   latchServo.attach(SERVO_PIN);
@@ -263,6 +295,15 @@ void setup() {
   }
   
   Serial.println("System Ready!");
+  
+  // Initialize audio system
+  playStartupSound();
+  if (IS_MASTER) {
+    playBackgroundMusic(1); // Track 1: Ambient/waiting music
+    triggerTabletAudio("ambient");
+    setAudioVolume(20); // Set moderate volume
+  }
+  
   printInstructions();
 }
 
@@ -611,7 +652,7 @@ void readTouchSensor() {
         Serial.print("Station ");
         Serial.print(STATION_ID);
         Serial.println(" touch ACTIVATED");
-        playTone(1000, 100);
+        playTouchFeedback();
       } else {
         Serial.print("Station ");
         Serial.print(STATION_ID);
@@ -636,7 +677,7 @@ void readHallSensor() {
       Serial.print("Station ");
       Serial.print(STATION_ID);
       Serial.println(" - Ball detected in completion zone!");
-      playTone(800, 200);
+      playTone(800, 200); // Ball detection beep
     }
   } else if (!hallDetected && currentMazeComplete) {
     currentMazeComplete = false;
@@ -651,7 +692,7 @@ void readHallSensor() {
       Serial.print("Station ");
       Serial.print(STATION_ID);
       Serial.println(" - MAZE COMPLETED!");
-      playTone(1200, 500);
+      playMazeCompleteSound();
     }
   } else if (!currentMazeComplete) {
     lastMazeComplete = false;
@@ -773,11 +814,16 @@ void handlePuzzle1Logic() {
       Serial.println("=== PUZZLE 1 SOLVED! ===");
       Serial.println("Opening latches for magnetic wands...");
       
+      // Audio feedback for puzzle 1 completion
+      playPuzzleCompleteSound();
+      
       openLatch();
       sendPuzzleCommand(4);
       
       if (IS_MASTER) {
         setWLEDPreset(PUZZLE1_COMPLETE_PRESET);
+        playBackgroundMusic(2); // Track 2: Puzzle 2 music
+        triggerTabletAudio("puzzle2");
       }
       
       sendPuzzleCommand(1);
@@ -806,8 +852,13 @@ void handlePuzzle2Logic() {
     Serial.println("=== PUZZLE 2 SOLVED! ===");
     Serial.println("Both mazes completed successfully!");
     
+    // Audio feedback for puzzle 2 completion
+    playPuzzleCompleteSound();
+    
     if (IS_MASTER) {
       setWLEDPreset(PUZZLE2_COMPLETE_PRESET);
+      playBackgroundMusic(3); // Track 3: Puzzle 3/video music
+      triggerTabletAudio("puzzle3");
     }
     
     sendPuzzleCommand(5);
@@ -841,8 +892,12 @@ void handlePuzzle3Logic() {
     Serial.println("=== PUZZLE 3 SOLVED! ===");
     Serial.println("Both videos completed successfully!");
     
+    // Audio feedback for puzzle 3 completion
+    playPuzzleCompleteSound();
+    
     if (IS_MASTER) {
       setWLEDPreset(PUZZLE3_COMPLETE_PRESET);
+      triggerTabletAudio("complete");
     }
     
     sendPuzzleCommand(7); // Puzzle 3 solved
@@ -852,10 +907,18 @@ void handlePuzzle3Logic() {
     if (currentPreset < PRESET_COUNT) {
       Serial.println("=== READY FOR NEXT CHALLENGE ===");
       currentPuzzleState = PUZZLE_IDLE;
+      if (IS_MASTER) {
+        playBackgroundMusic(1); // Return to ambient music
+        triggerTabletAudio("ambient");
+      }
       resetForNextRound();
     } else {
       currentPuzzleState = ALL_PUZZLES_COMPLETE;
       Serial.println("=== ALL PUZZLES COMPLETE! ===");
+      if (IS_MASTER) {
+        playBackgroundMusic(4); // Track 4: Final victory music
+        triggerTabletAudio("victory");
+      }
       finalCelebration();
     }
   }
@@ -962,14 +1025,19 @@ void resetForNextRound() {
 }
 
 void finalCelebration() {
+  Serial.println("🎉 CONGRATULATIONS! ALL PUZZLES SOLVED! 🎉");
+  
+  // Epic sound celebration
+  playFinalCelebration();
+  
+  // Epic light show
   for (int i = 0; i < 10; i++) {
     digitalWrite(STATUS_LED_PIN, HIGH);
     digitalWrite(EXTERNAL_LED_PIN, HIGH);
-    playTone(1000 + (i * 100), 150);
-    delay(150);
+    delay(200);
     digitalWrite(STATUS_LED_PIN, LOW);
     digitalWrite(EXTERNAL_LED_PIN, LOW);
-    delay(150);
+    delay(100);
   }
 }
 
@@ -979,7 +1047,7 @@ void openLatch() {
     latchServo.write(SERVO_OPEN_ANGLE);
     latchOpen = true;
     localStatus.latchOpen = true;
-    playTone(500, 200);
+    playLatchSound();
     delay(SERVO_MOVE_DELAY);
   }
 }
@@ -990,7 +1058,7 @@ void closeLatch() {
     latchServo.write(SERVO_CLOSED_ANGLE);
     latchOpen = false;
     localStatus.latchOpen = false;
-    playTone(300, 200);
+    playTone(300, 200); // Latch close sound
     delay(SERVO_MOVE_DELAY);
   }
 }
@@ -1109,10 +1177,123 @@ void celebrationFlash() {
   }
 }
 
+// ============================================
+// AUDIO CONTROL FUNCTIONS
+// ============================================
+
+// Enhanced buzzer sound effects
 void playTone(int frequency, int duration) {
   tone(BUZZER_PIN, frequency, duration);
   delay(duration);
   noTone(BUZZER_PIN);
+}
+
+void playStartupSound() {
+  for (int i = 0; i < 3; i++) {
+    playTone(440 + (i * 110), 150);
+    delay(50);
+  }
+}
+
+void playPuzzleCompleteSound() {
+  // Victory fanfare
+  int melody[] = {523, 659, 784, 1047};
+  for (int i = 0; i < 4; i++) {
+    playTone(melody[i], 200);
+    delay(50);
+  }
+}
+
+void playErrorSound() {
+  playTone(200, 300);
+  delay(100);
+  playTone(150, 300);
+}
+
+void playTouchFeedback() {
+  playTone(800, 100);
+}
+
+void playMazeCompleteSound() {
+  // Rising melody
+  for (int i = 0; i < 5; i++) {
+    playTone(400 + (i * 100), 120);
+    delay(30);
+  }
+}
+
+void playLatchSound() {
+  playTone(600, 150);
+  delay(50);
+  playTone(800, 150);
+}
+
+void playFinalCelebration() {
+  // Epic victory sound
+  int celebration[] = {523, 659, 784, 1047, 1319, 1568, 2093};
+  for (int i = 0; i < 7; i++) {
+    playTone(celebration[i], 150);
+    delay(30);
+  }
+  delay(200);
+  // Repeat once more
+  for (int i = 0; i < 7; i++) {
+    playTone(celebration[i], 100);
+    delay(20);
+  }
+}
+
+// DFPlayer Mini control functions (if connected)
+void playBackgroundMusic(int trackNumber) {
+  // Uncomment if DFPlayer Mini is connected
+  // if (myDFPlayer.isPlaying()) {
+  //   myDFPlayer.stop();
+  //   delay(100);
+  // }
+  // myDFPlayer.play(trackNumber);
+  Serial.print("Playing background music track: ");
+  Serial.println(trackNumber);
+}
+
+void stopBackgroundMusic() {
+  // Uncomment if DFPlayer Mini is connected
+  // if (myDFPlayer.isPlaying()) {
+  //   myDFPlayer.stop();
+  // }
+  Serial.println("Stopping background music");
+}
+
+void setAudioVolume(int volume) {
+  // Volume range 0-30 for DFPlayer Mini
+  // Uncomment if DFPlayer Mini is connected
+  // myDFPlayer.volume(volume);
+  Serial.print("Setting audio volume to: ");
+  Serial.println(volume);
+}
+
+// Web-based audio control for tablets
+void triggerTabletAudio(String audioCommand) {
+  String tablet1URL = "http://" + String(tabletIP1) + "/audio?command=" + audioCommand;
+  String tablet2URL = "http://" + String(tabletIP2) + "/audio?command=" + audioCommand;
+  
+  HTTPClient http1, http2;
+  
+  // Send audio command to both tablets
+  http1.begin(tablet1URL);
+  http2.begin(tablet2URL);
+  
+  int response1 = http1.GET();
+  int response2 = http2.GET();
+  
+  if (response1 > 0) {
+    Serial.println("Tablet 1 audio command sent: " + audioCommand);
+  }
+  if (response2 > 0) {
+    Serial.println("Tablet 2 audio command sent: " + audioCommand);
+  }
+  
+  http1.end();
+  http2.end();
 }
 
 void handleSerialCommands() {

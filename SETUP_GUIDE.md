@@ -10,7 +10,9 @@ This system creates a three-puzzle cooperative experience where 2 people must wo
 - **Touch Sensor** (capacitive or resistive)
 - **Servo Motor** (SG90 or similar for latch mechanism)
 - **Hall Sensor** (A3144 or similar for maze completion detection)
-- **Buzzer** (optional, for audio feedback)
+- **Buzzer** (GPIO19, for sound effects and simple melodies)
+- **DFPlayer Mini + Speaker** (optional, for high-quality MP3 music)
+- **MicroSD Card** (for DFPlayer Mini audio files)
 - **External LED** (optional, for better visual feedback)
 - **Magnetic Wand** (neodymium magnet on stick/handle)
 - **Metal Ball** (steel ball bearing, ~8-10mm diameter)
@@ -295,10 +297,37 @@ const char* wledIP = "192.168.1.10X";  // Different IP per station
 - Monitor for overheating during extended use
 - Keep backup configurations
 
+## Audio Setup
+
+This system includes comprehensive audio features to enhance the puzzle experience:
+
+### Audio Components:
+- **ESP32 Buzzer** - Built-in sound effects and melodies
+- **DFPlayer Mini** - Optional high-quality MP3 background music  
+- **Tablet Audio** - Synchronized web-based audio with volume control
+- **Combined System** - Rich, immersive audio experience
+
+### Audio Features:
+- Startup melody when system initializes
+- Touch feedback sounds for sensor activation
+- Different background music for each puzzle phase
+- Maze completion and success celebration sounds
+- Synchronized audio changes across all devices
+- Volume control and audio status display
+
+### Setup Instructions:
+See `AUDIO_SETUP_GUIDE.md` for complete instructions including:
+- Hardware wiring diagrams for DFPlayer Mini
+- Audio file preparation and SD card setup
+- Tablet audio configuration and synchronization
+- Troubleshooting and advanced audio features
+- Cost breakdown for different audio setups
+
 ## Support
 
 For issues or modifications:
 1. Check serial monitor output for error messages
 2. Verify all connections and settings
+3. For audio issues, see troubleshooting section in `AUDIO_SETUP_GUIDE.md`
 3. Test components individually before full system test
 4. Consider interference from other 2.4GHz devices
