@@ -1,15 +1,22 @@
-# ESP32 Multi-Station WLED Touch Controller Setup Guide
+# ESP32 Multi-Station WLED Touch Controller v2.0 Setup Guide
 
 ## Overview
-This system creates a cooperative puzzle where 3 people must simultaneously touch their sensors for a set duration to advance WLED lighting presets. The stations communicate via ESP-NOW for low latency coordination.
+This system creates a two-puzzle cooperative experience where 3 people must work together. Puzzle 1 requires simultaneous touch activation, which opens servo latches containing magnetic wands. Puzzle 2 requires using these wands to guide metal balls through mazes to completion zones detected by hall sensors.
 
 ## Hardware Requirements
 
 ### Per Station:
 - **ESP32 DevKit** (any variant)
 - **Touch Sensor** (capacitive or resistive)
+- **Servo Motor** (SG90 or similar for latch mechanism)
+- **Hall Sensor** (A3144 or similar for maze completion detection)
+- **Buzzer** (optional, for audio feedback)
 - **External LED** (optional, for better visual feedback)
-- **Resistors** (if needed for LED current limiting)
+- **Magnetic Wand** (neodymium magnet on stick/handle)
+- **Metal Ball** (steel ball bearing, ~8-10mm diameter)
+- **Maze Structure** (wood/acrylic with channels and completion zone)
+- **Latch Mechanism** (servo-controlled door/gate for wand storage)
+- **Resistors** (220Ω for LEDs, pull-ups if needed)
 - **Breadboard or PCB** for connections
 - **Power Supply** (USB or battery pack)
 
@@ -27,11 +34,31 @@ ESP32 GPIO4 → Touch Sensor Signal
 GND → Touch Sensor GND
 ```
 
+### Servo Motor Connection:
+```
+ESP32 GPIO16 → Servo Signal (Orange/Yellow wire)
+5V → Servo VCC (Red wire)
+GND → Servo GND (Brown/Black wire)
+```
+
+### Hall Sensor Connection:
+```
+ESP32 GPIO34 → Hall Sensor Signal (analog)
+3.3V → Hall Sensor VCC
+GND → Hall Sensor GND
+```
+
 ### LED Connections:
 ```
 ESP32 GPIO2 → Built-in LED (status)
 ESP32 GPIO5 → External LED + (through 220Ω resistor)
 GND → External LED -
+```
+
+### Buzzer Connection (Optional):
+```
+ESP32 GPIO19 → Buzzer +
+GND → Buzzer -
 ```
 
 ## Software Setup
@@ -40,6 +67,7 @@ GND → External LED -
 In Arduino IDE, install these libraries:
 - **ESP32** board package
 - **ArduinoJson** by Benoit Blanchon
+- **ESP32Servo** by Kevin Harrington
 - **WiFi** (included with ESP32 package)
 - **HTTPClient** (included with ESP32 package)
 
@@ -112,27 +140,67 @@ bool touchDetected = touchValue < TOUCH_THRESHOLD;
 4. Save as presets 1-10
 
 ### Example Presets:
-- Preset 1: Solid Red
-- Preset 2: Rainbow Chase
-- Preset 3: Blue Breathe
+- Preset 0: Soft White Glow (initial state)
+- Preset 1: Green Pulse (puzzle 1 complete)
+- Preset 2: Rainbow Chase (puzzle 2 complete)
+- Preset 3: Blue Fire Effect
 - Preset 4: Multi-color Strobe
-- Preset 5: Fire Effect
+- Preset 5: Purple Breathe
 - etc.
+
+## Physical Construction
+
+### Magnetic Maze Design:
+1. **Base Material**: 6mm acrylic or wood base (minimum 20cm x 20cm)
+2. **Maze Walls**: 3-5mm thick strips creating channels for ball movement
+3. **Ball Path**: Channels should be 12-15mm wide for 8-10mm steel balls
+4. **Completion Zone**: 25mm diameter circle at maze end with embedded hall sensor
+5. **Start Position**: Elevated entry point with ball holder
+6. **Magnetic Wand**: Neodymium magnet (10-15mm) on 15-20cm handle
+
+### Servo Latch Mechanism:
+1. **Latch Box**: Small compartment (5cm x 3cm x 3cm) for wand storage
+2. **Servo Mount**: SG90 servo with arm controlling sliding door/gate
+3. **Door Material**: Light plastic or thin wood that servo can easily move
+4. **Wand Holder**: Foam insert or clips to secure magnetic wand
+5. **Access Opening**: Large enough for easy wand retrieval
+
+### Hall Sensor Placement:
+1. **Sensor Position**: Mounted under completion zone, flush with surface
+2. **Detection Range**: 5-10mm from metal ball when in zone
+3. **Shielding**: Use non-magnetic materials around sensor
+4. **Calibration**: Test with actual ball to determine threshold values
 
 ## System Configuration
 
 ### Timing Settings (adjustable in code):
 ```cpp
-#define PUZZLE_SOLVE_TIME 2000          // Hold time: 2 seconds
-#define TOUCH_DEBOUNCE_TIME 100         // Debounce: 100ms
+#define PUZZLE1_SOLVE_TIME 2000         // Puzzle 1 hold time: 2 seconds
+#define TOUCH_DEBOUNCE_TIME 100         // Touch debounce: 100ms
+#define HALL_DEBOUNCE_TIME 500          // Hall sensor debounce: 500ms
+#define MAZE_COMPLETION_TIME 1000       // Ball must stay in zone: 1 second
 #define HEARTBEAT_INTERVAL 1000         // Communication: 1 second
 #define TIMEOUT_THRESHOLD 3000          // Station timeout: 3 seconds
 ```
 
+### Servo Settings:
+```cpp
+#define SERVO_CLOSED_ANGLE 0            // Latch closed position
+#define SERVO_OPEN_ANGLE 90             // Latch open position
+#define SERVO_MOVE_DELAY 1000           // Time for servo movement
+```
+
+### Hall Sensor Settings:
+```cpp
+#define HALL_THRESHOLD 100              // Adjust based on magnet strength
+```
+
 ### LED Patterns:
-- **Slow Blink**: Station idle
+- **Slow Blink**: Station idle (puzzle 1 ready)
 - **Solid**: Touch sensor active
-- **Fast Blink**: Puzzle in progress
+- **Fast Blink**: Puzzle 1 in progress
+- **Status LED Solid**: Puzzle 1 complete (puzzle 2 ready)
+- **External LED**: Shows maze completion status
 - **Rapid Flash**: Puzzle solved (celebration)
 
 ## Testing Procedure
