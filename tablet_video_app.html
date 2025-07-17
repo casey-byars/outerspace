@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Puzzle Station Video Player</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            overflow: hidden;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .app-container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+        
+        .header {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 20px;
+            text-align: center;
+            backdrop-filter: blur(10px);
+        }
+        
+        .station-info {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        
+        .status-badge {
+            display: inline-block;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .status-waiting { background: #ff9500; }
+        .status-ready { background: #34c759; }
+        .status-playing { background: #007aff; }
+        .status-completed { background: #30d158; }
+        .status-error { background: #ff3b30; }
+        
+        .video-container {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            position: relative;
+        }
+        
+        .video-player {
+            width: 100%;
+            max-width: 800px;
+            height: auto;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+            background: #000;
+        }
+        
+        .video-overlay {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            z-index: 10;
+        }
+        
+        .play-button {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.9);
+            border: none;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 0 auto 20px;
+            transition: all 0.3s ease;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        }
+        
+        .play-button:hover {
+            transform: scale(1.1);
+            background: white;
+        }
+        
+        .play-button::after {
+            content: '';
+            width: 0;
+            height: 0;
+            border-left: 30px solid #333;
+            border-top: 20px solid transparent;
+            border-bottom: 20px solid transparent;
+            margin-left: 8px;
+        }
+        
+        .progress-section {
+            background: rgba(0, 0, 0, 0.5);
+            padding: 20px;
+            backdrop-filter: blur(10px);
+        }
+        
+        .progress-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        
+        .progress-text {
+            font-size: 18px;
+            font-weight: 600;
+        }
+        
+        .time-display {
+            font-family: 'SF Mono', Monaco, monospace;
+            font-size: 16px;
+            opacity: 0.8;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 4px;
+            overflow: hidden;
+            margin-bottom: 15px;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #34c759, #30d158);
+            border-radius: 4px;
+            transition: width 0.5s ease;
+            width: 0%;
+        }
+        
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+        
+        .control-btn {
+            padding: 12px 24px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+        }
+        
+        .control-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+            border-color: rgba(255, 255, 255, 0.6);
+        }
+        
+        .control-btn:active {
+            transform: scale(0.95);
+        }
+        
+        .connection-status {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 10px 15px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            z-index: 100;
+        }
+        
+        .connected { background: #34c759; }
+        .disconnected { background: #ff3b30; }
+        
+        .fullscreen-toggle {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: rgba(0, 0, 0, 0.7);
+            border: none;
+            color: white;
+            cursor: pointer;
+            font-size: 20px;
+            backdrop-filter: blur(10px);
+        }
+        
+        @media (max-width: 768px) {
+            .header { padding: 15px; }
+            .station-info { font-size: 20px; }
+            .play-button { width: 80px; height: 80px; }
+            .play-button::after { 
+                border-left: 20px solid #333;
+                border-top: 15px solid transparent;
+                border-bottom: 15px solid transparent;
+            }
+            .controls { gap: 10px; }
+            .control-btn { padding: 10px 20px; font-size: 14px; }
+        }
+        
+        .hidden { display: none; }
+        
+        .waiting-message {
+            text-align: center;
+            font-size: 24px;
+            opacity: 0.8;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 0.5; }
+            50% { opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <div class="connection-status" id="connectionStatus">Connecting...</div>
+        
+        <div class="header">
+            <div class="station-info" id="stationInfo">Station 1 - Puzzle 3</div>
+            <div class="status-badge status-waiting" id="statusBadge">Waiting for Puzzle 2</div>
+        </div>
+        
+        <div class="video-container">
+            <video class="video-player" id="videoPlayer" preload="metadata">
+                <source id="videoSource" src="" type="video/mp4">
+                Your device doesn't support video playback.
+            </video>
+            
+            <div class="video-overlay" id="videoOverlay">
+                <button class="play-button" id="playButton"></button>
+                <div class="waiting-message" id="waitingMessage">
+                    Waiting for Puzzle 2 to be completed...
+                </div>
+            </div>
+        </div>
+        
+        <div class="progress-section">
+            <div class="progress-header">
+                <div class="progress-text" id="progressText">Ready to Start</div>
+                <div class="time-display" id="timeDisplay">00:00 / 00:00</div>
+            </div>
+            
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+            
+            <div class="controls">
+                <button class="control-btn" id="playBtn">Play</button>
+                <button class="control-btn" id="pauseBtn">Pause</button>
+                <button class="control-btn" id="restartBtn">Restart</button>
+                <button class="control-btn" id="completeBtn">Mark Complete</button>
+            </div>
+        </div>
+        
+        <button class="fullscreen-toggle" id="fullscreenBtn">⛶</button>
+    </div>
+
+    <script>
+        class PuzzleVideoPlayer {
+            constructor() {
+                // Configuration - Update these for each station
+                this.stationId = 1; // Change to 1, 2, or 3
+                this.esp32IP = '192.168.1.100'; // ESP32 IP address
+                this.videoFile = `puzzle3_station${this.stationId}.mp4`;
+                
+                // DOM elements
+                this.video = document.getElementById('videoPlayer');
+                this.videoSource = document.getElementById('videoSource');
+                this.playButton = document.getElementById('playButton');
+                this.videoOverlay = document.getElementById('videoOverlay');
+                this.waitingMessage = document.getElementById('waitingMessage');
+                this.statusBadge = document.getElementById('statusBadge');
+                this.progressText = document.getElementById('progressText');
+                this.progressFill = document.getElementById('progressFill');
+                this.timeDisplay = document.getElementById('timeDisplay');
+                this.connectionStatus = document.getElementById('connectionStatus');
+                this.stationInfo = document.getElementById('stationInfo');
+                
+                // Control buttons
+                this.playBtn = document.getElementById('playBtn');
+                this.pauseBtn = document.getElementById('pauseBtn');
+                this.restartBtn = document.getElementById('restartBtn');
+                this.completeBtn = document.getElementById('completeBtn');
+                this.fullscreenBtn = document.getElementById('fullscreenBtn');
+                
+                // State
+                this.isConnected = false;
+                this.canPlay = false;
+                this.videoStarted = false;
+                this.videoCompleted = false;
+                this.lastProgressUpdate = 0;
+                
+                this.init();
+            }
+            
+            init() {
+                this.setupVideo();
+                this.setupEventListeners();
+                this.updateStationInfo();
+                this.startHeartbeat();
+                this.checkPuzzleStatus();
+            }
+            
+            setupVideo() {
+                this.videoSource.src = this.videoFile;
+                this.video.load();
+                
+                // Initially hide video controls
+                this.video.controls = false;
+                this.updateOverlay();
+            }
+            
+            setupEventListeners() {
+                // Video events
+                this.video.addEventListener('loadedmetadata', () => {
+                    this.updateTimeDisplay();
+                });
+                
+                this.video.addEventListener('timeupdate', () => {
+                    this.updateProgress();
+                    this.reportProgress();
+                });
+                
+                this.video.addEventListener('play', () => {
+                    if (!this.videoStarted) {
+                        this.videoStarted = true;
+                        this.reportVideoStart();
+                    }
+                    this.updateStatus('playing', 'Playing');
+                    this.updateOverlay();
+                });
+                
+                this.video.addEventListener('pause', () => {
+                    this.updateStatus('playing', 'Paused');
+                    this.reportVideoPause();
+                });
+                
+                this.video.addEventListener('ended', () => {
+                    this.videoCompleted = true;
+                    this.updateStatus('completed', 'Completed');
+                    this.reportVideoComplete();
+                    this.updateOverlay();
+                });
+                
+                this.video.addEventListener('error', () => {
+                    this.updateStatus('error', 'Video Error');
+                    console.error('Video playback error');
+                });
+                
+                // Control events
+                this.playButton.addEventListener('click', () => this.togglePlay());
+                this.playBtn.addEventListener('click', () => this.play());
+                this.pauseBtn.addEventListener('click', () => this.pause());
+                this.restartBtn.addEventListener('click', () => this.restart());
+                this.completeBtn.addEventListener('click', () => this.markComplete());
+                this.fullscreenBtn.addEventListener('click', () => this.toggleFullscreen());
+                
+                // Keyboard shortcuts
+                document.addEventListener('keydown', (e) => {
+                    switch(e.key) {
+                        case ' ':
+                        case 'k':
+                            e.preventDefault();
+                            this.togglePlay();
+                            break;
+                        case 'f':
+                            e.preventDefault();
+                            this.toggleFullscreen();
+                            break;
+                        case 'r':
+                            e.preventDefault();
+                            this.restart();
+                            break;
+                    }
+                });
+                
+                // Touch events for mobile
+                this.video.addEventListener('click', () => this.togglePlay());
+                
+                // Prevent accidental navigation
+                window.addEventListener('beforeunload', (e) => {
+                    if (this.videoStarted && !this.videoCompleted) {
+                        e.preventDefault();
+                        e.returnValue = '';
+                    }
+                });
+            }
+            
+            updateStationInfo() {
+                this.stationInfo.textContent = `Station ${this.stationId} - Puzzle 3`;
+                document.title = `Station ${this.stationId} Video Player`;
+            }
+            
+            startHeartbeat() {
+                // Check connection every 5 seconds
+                setInterval(() => {
+                    this.checkConnection();
+                }, 5000);
+                
+                // Initial connection check
+                this.checkConnection();
+            }
+            
+            async checkConnection() {
+                try {
+                    const response = await fetch(`http://${this.esp32IP}/status`, {
+                        method: 'GET',
+                        timeout: 3000
+                    });
+                    
+                    if (response.ok) {
+                        const data = await response.json();
+                        this.isConnected = true;
+                        this.updateConnectionStatus(true);
+                        this.handleESP32Status(data);
+                    } else {
+                        throw new Error('Connection failed');
+                    }
+                } catch (error) {
+                    this.isConnected = false;
+                    this.updateConnectionStatus(false);
+                    console.warn('ESP32 connection lost:', error.message);
+                }
+            }
+            
+            async checkPuzzleStatus() {
+                // Check if puzzle 2 is completed and video should start
+                try {
+                    const response = await fetch(`http://${this.esp32IP}/status`);
+                    if (response.ok) {
+                        const data = await response.json();
+                        
+                        // Check if puzzle 2 is complete and video should start
+                        if (data.puzzleState >= 4 && !this.canPlay) { // PUZZLE2_COMPLETE or higher
+                            this.enableVideo();
+                        }
+                    }
+                } catch (error) {
+                    console.warn('Could not check puzzle status:', error.message);
+                }
+                
+                // Check again in 2 seconds if not ready
+                if (!this.canPlay) {
+                    setTimeout(() => this.checkPuzzleStatus(), 2000);
+                }
+            }
+            
+            handleESP32Status(data) {
+                // Handle status updates from ESP32
+                if (data.puzzleState >= 4 && !this.canPlay) { // PUZZLE2_COMPLETE
+                    this.enableVideo();
+                }
+                
+                if (data.videoStarted && !this.videoStarted && this.canPlay) {
+                    this.play();
+                }
+            }
+            
+            enableVideo() {
+                this.canPlay = true;
+                this.updateStatus('ready', 'Ready to Play');
+                this.updateOverlay();
+                console.log('Video enabled - Puzzle 2 completed');
+            }
+            
+            updateConnectionStatus(connected) {
+                this.connectionStatus.textContent = connected ? 'Connected' : 'Disconnected';
+                this.connectionStatus.className = `connection-status ${connected ? 'connected' : 'disconnected'}`;
+            }
+            
+            updateStatus(type, text) {
+                this.statusBadge.className = `status-badge status-${type}`;
+                this.statusBadge.textContent = text;
+                this.progressText.textContent = text;
+            }
+            
+            updateOverlay() {
+                const showOverlay = !this.canPlay || (this.canPlay && this.video.paused && !this.videoCompleted);
+                this.videoOverlay.style.display = showOverlay ? 'flex' : 'none';
+                this.videoOverlay.style.flexDirection = 'column';
+                this.videoOverlay.style.justifyContent = 'center';
+                this.videoOverlay.style.alignItems = 'center';
+                
+                if (!this.canPlay) {
+                    this.playButton.style.display = 'none';
+                    this.waitingMessage.style.display = 'block';
+                } else {
+                    this.playButton.style.display = this.video.paused && !this.videoCompleted ? 'flex' : 'none';
+                    this.waitingMessage.style.display = 'none';
+                }
+            }
+            
+            updateProgress() {
+                if (this.video.duration) {
+                    const progress = (this.video.currentTime / this.video.duration) * 100;
+                    this.progressFill.style.width = `${progress}%`;
+                    this.updateTimeDisplay();
+                }
+            }
+            
+            updateTimeDisplay() {
+                const current = this.formatTime(this.video.currentTime || 0);
+                const total = this.formatTime(this.video.duration || 0);
+                this.timeDisplay.textContent = `${current} / ${total}`;
+            }
+            
+            formatTime(seconds) {
+                const mins = Math.floor(seconds / 60);
+                const secs = Math.floor(seconds % 60);
+                return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+            }
+            
+            async reportVideoStart() {
+                try {
+                    await fetch(`http://${this.esp32IP}/video/start`, {
+                        method: 'POST'
+                    });
+                    console.log('Video start reported to ESP32');
+                } catch (error) {
+                    console.warn('Failed to report video start:', error.message);
+                }
+            }
+            
+            async reportProgress() {
+                // Throttle progress updates
+                const now = Date.now();
+                if (now - this.lastProgressUpdate < 2000) return; // Max every 2 seconds
+                this.lastProgressUpdate = now;
+                
+                if (this.video.duration) {
+                    const progress = this.video.currentTime / this.video.duration;
+                    
+                    try {
+                        await fetch(`http://${this.esp32IP}/video/progress`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                            body: `progress=${progress}`
+                        });
+                    } catch (error) {
+                        console.warn('Failed to report progress:', error.message);
+                    }
+                }
+            }
+            
+            async reportVideoComplete() {
+                try {
+                    await fetch(`http://${this.esp32IP}/video/complete`, {
+                        method: 'POST'
+                    });
+                    console.log('Video completion reported to ESP32');
+                } catch (error) {
+                    console.warn('Failed to report video completion:', error.message);
+                }
+            }
+            
+            async reportVideoPause() {
+                try {
+                    await fetch(`http://${this.esp32IP}/video/pause`, {
+                        method: 'POST'
+                    });
+                } catch (error) {
+                    console.warn('Failed to report video pause:', error.message);
+                }
+            }
+            
+            togglePlay() {
+                if (!this.canPlay) return;
+                
+                if (this.video.paused) {
+                    this.play();
+                } else {
+                    this.pause();
+                }
+            }
+            
+            play() {
+                if (!this.canPlay) return;
+                
+                this.video.play().catch(error => {
+                    console.error('Play failed:', error);
+                    this.updateStatus('error', 'Play Error');
+                });
+            }
+            
+            pause() {
+                this.video.pause();
+            }
+            
+            restart() {
+                this.video.currentTime = 0;
+                this.videoStarted = false;
+                this.videoCompleted = false;
+                this.updateOverlay();
+                if (!this.video.paused) {
+                    this.play();
+                }
+            }
+            
+            async markComplete() {
+                this.videoCompleted = true;
+                this.updateStatus('completed', 'Manually Completed');
+                this.updateOverlay();
+                await this.reportVideoComplete();
+            }
+            
+            toggleFullscreen() {
+                if (document.fullscreenElement) {
+                    document.exitFullscreen();
+                } else {
+                    document.documentElement.requestFullscreen().catch(error => {
+                        console.warn('Fullscreen failed:', error);
+                    });
+                }
+            }
+        }
+        
+        // Initialize the app when page loads
+        window.addEventListener('DOMContentLoaded', () => {
+            new PuzzleVideoPlayer();
+        });
+        
+        // Service Worker for offline capability (optional)
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/sw.js').catch(error => {
+                console.log('Service Worker registration failed:', error);
+            });
+        }
+    </script>
+</body>
+</html>
